@@ -1,7 +1,11 @@
 import bcrypt from "bcryptjs";
 import type { TokenPayload } from "google-auth-library";
 import type { JwtPayload, SignOptions } from "jsonwebtoken";
-import { Role, UserStatus } from "../../../generated/prisma/enums";
+import {
+	AuthProvider,
+	Role,
+	UserStatus,
+} from "../../../generated/prisma/enums";
 import config from "../../config";
 import { googleClient } from "../../lib/GoogleAuth";
 import { prisma } from "../../lib/prisma";
@@ -91,7 +95,16 @@ const loginUser = async (payload: ILoginUserPayload) => {
 		throw new Error("User is deleted");
 	}
 
-	const isPasswordMatched = await bcrypt.compare(password, user.password);
+	if (user.authProvider !== AuthProvider.CREDENTIAL) {
+		throw new Error(
+			`User is registered with Google. Please login using Google`,
+		);
+	}
+
+	const isPasswordMatched = await bcrypt.compare(
+		password,
+		user.password as string,
+	);
 
 	if (!isPasswordMatched) {
 		throw new Error("Invalid credentials");
@@ -219,13 +232,45 @@ const googleLoginAuth = async (payload: IGoogleLoginPayload) => {
 
 	let user = isPatientExistsWithGoogleAuth;
 
-	if (!user) {
+	if (!isPatientExistsWithGoogleAuth) {
+		// check if user exists with same email but different auth provider
+		const isUserExistsWithCredentials = await prisma.user.findUnique({
+			where: {
+				email: googleIdTokenPayload.email,
+				role: Role.PATIENT,
+				authProvider: AuthProvider.GOOGLE,
+			},
+		});
+
+		// check if user is blocked or deleted
+		if (isUserExistsWithCredentials) {
+			if (isUserExistsWithCredentials.status === UserStatus.BLOCKED) {
+				throw new Error("User is blocked");
+			}
+			if (
+				isUserExistsWithCredentials.isDeleted ||
+				isUserExistsWithCredentials.status === UserStatus.DELETED
+			) {
+				throw new Error("User is deleted");
+			}
+
+			user = await prisma.user.update({
+				where: {
+					id: isUserExistsWithCredentials.id,
+				},
+				data: {
+					googleId: googleIdTokenPayload.sub,
+					emailVerified: true,
+				},
+			});
+		}
+
 		user = await prisma.user.create({
 			data: {
 				name: googleIdTokenPayload.name || "Unknown",
 				email: googleIdTokenPayload.email || "",
 				googleId: googleIdTokenPayload.sub,
-				authProvider: "GOOGLE",
+				authProvider: AuthProvider.GOOGLE,
 				role: Role.PATIENT,
 				status: UserStatus.ACTIVE,
 				emailVerified: true,
@@ -237,6 +282,17 @@ const googleLoginAuth = async (payload: IGoogleLoginPayload) => {
 				},
 			},
 		});
+	}
+
+	if (!user) {
+		throw new Error("User not found or created");
+	}
+
+	if (user.status === UserStatus.BLOCKED) {
+		throw new Error("User is blocked");
+	}
+	if (user.isDeleted || user.status === UserStatus.DELETED) {
+		throw new Error("User is deleted");
 	}
 
 	const jwtPayload = {
