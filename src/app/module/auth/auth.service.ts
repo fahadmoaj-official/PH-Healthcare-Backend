@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import type { TokenPayload } from "google-auth-library";
+import Crypto from "crypto";
 import type { JwtPayload, SignOptions } from "jsonwebtoken";
+
 import {
 	AuthProvider,
 	Role,
@@ -11,11 +13,15 @@ import { googleClient } from "../../lib/GoogleAuth";
 import { prisma } from "../../lib/prisma";
 import { jwtUtils } from "../../utils/jwt";
 import type {
+	IForgotPasswordPayload,
 	IGoogleLoginPayload,
 	ILoginUserPayload,
 	IRegisterPatientPayload,
 	IRequestUser,
+	IResetPasswordPayload,
 } from "./auth.interface";
+import { RedisClient } from "../../lib/redis";
+
 
 const registerPatient = async (payload: IRegisterPatientPayload) => {
 	const { name, password, email } = payload;
@@ -324,10 +330,110 @@ const googleLoginAuth = async (payload: IGoogleLoginPayload) => {
 	};
 };
 
+
+const forgotPasswordAuth = async (payload: IForgotPasswordPayload) => {
+   
+	const { email } = payload;
+
+	const IsUserExists = await prisma.user.findUnique({
+		where: { email },
+	});
+
+	if (!IsUserExists) {
+		throw new Error("User Does not Exist by forgetAuth");
+	}
+
+	if (IsUserExists.status === UserStatus.BLOCKED) {
+		throw new Error("User is blocked");
+	}
+
+	if (IsUserExists.isDeleted || IsUserExists.status === UserStatus.DELETED) {
+		throw new Error("User is deleted");
+	}
+
+	if( IsUserExists.authProvider !== AuthProvider.CREDENTIAL) {
+		throw new Error("User is registered with Google. Please login using Google");
+	}
+
+	// otp genarte
+
+	const otp = Crypto.randomInt(100000, 999999).toString();
+
+	const key = `forgot-password:${email}`;
+
+	await RedisClient.set(key, otp,{
+		expiration: {
+			type: "EX",
+			value: 5 * 60, // 5 minutes in seconds
+		},
+	});
+	
+
+
+}
+
+const resetPasswordAuth = async (payload: IResetPasswordPayload) => {
+	const { email ,otp,newPassword} = payload;
+
+	const IsUserExists = await prisma.user.findUnique({
+		where: { email },
+	});
+	
+	if (!IsUserExists) {
+		throw new Error("User Does not Exist by forgetAuth");
+	}
+
+	if (IsUserExists.status === UserStatus.BLOCKED) {
+		throw new Error("User is blocked");
+	}
+
+	if (IsUserExists.isDeleted || IsUserExists.status === UserStatus.DELETED) {
+		throw new Error("User is deleted");
+	}
+
+	if( IsUserExists.authProvider !== AuthProvider.CREDENTIAL) {
+		throw new Error("User is registered with Google. Please login using Google");
+	}
+
+	// otp genarte
+
+const Get_otp = await RedisClient.get(`forgot-password:${email}`);
+
+if (!Get_otp) {
+    throw new Error("OTP has expired or is invalid");
+}
+
+if (Get_otp !== otp) {
+    throw new Error("Invalid OTP");
+}
+
+const hashedPassword = await bcrypt.hash(
+    newPassword,
+    Number(config.BCRYPT_SALT_ROUNDS)
+);
+
+await prisma.user.update({
+    where: { email },
+    data: {
+        password: hashedPassword,
+    },
+});
+
+await RedisClient.del(`forgot-password:${email}`);
+
+return {
+    message: "OTP verified successfully and password reset",
+};
+	}
+
+
+
 export const AuthService = {
 	registerPatient,
 	loginUser,
 	getMe,
 	refreshToken,
 	googleLoginAuth,
+	resetPasswordAuth,
+	forgotPasswordAuth,
 };

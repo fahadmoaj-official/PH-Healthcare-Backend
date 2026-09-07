@@ -1,6 +1,7 @@
 import app from "./app";
 import config from "./app/config";
 import { prisma } from "./app/lib/prisma";
+import { RedisClient } from "./app/lib/redis";
 import {
 	seedSuperAdmin,
 	seedTesterAdmin,
@@ -12,10 +13,13 @@ const PORT = config.PORT;
 const main = async () => {
 	try {
 		await prisma.$connect();
+		console.log("Connected to the database successfully. 💕");
+		await RedisClient.connect();
+		console.log("Connected to Redis successfully. 🔋");
+
 		await seedSuperAdmin();
 		await seedTesterAdmin();
 		await seedTesterDoctor();
-		console.log("Connected to the database successfully.");
 		app.listen(PORT, () => {
 			console.log(`Server is running on port ${PORT}`);
 		});

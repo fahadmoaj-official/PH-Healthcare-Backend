@@ -1,5 +1,6 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import crypto from "crypto";
 import express, {
 	type Application,
 	type Request,
@@ -29,11 +30,15 @@ app.use(cookieParser());
 
 app.use("/api/v1/auth", AuthRoutes);
 
+
+
 // Basic route
 app.get("/", async (req: Request, res: Response) => {
+	const otp = crypto.randomInt(100000, 999999).toString();
 	res.status(httpStatus.OK).json({
 		success: true,
 		message: "Welcome to PH Healthcare System Backend",
+		otp: otp,
 	});
 });
 
