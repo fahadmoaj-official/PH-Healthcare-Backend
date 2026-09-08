@@ -1,5 +1,6 @@
 import app from "./app";
 import config from "./app/config";
+import { transporter } from "./app/lib/nodeMailer";
 import { prisma } from "./app/lib/prisma";
 import { RedisClient } from "./app/lib/redis";
 import {
@@ -16,6 +17,9 @@ const main = async () => {
 		console.log("Connected to the database successfully. 💕");
 		await RedisClient.connect();
 		console.log("Connected to Redis successfully. 🔋");
+
+		await transporter.verify();
+		console.log("SMTP transporter is ready to send emails. 📧");
 
 		await seedSuperAdmin();
 		await seedTesterAdmin();

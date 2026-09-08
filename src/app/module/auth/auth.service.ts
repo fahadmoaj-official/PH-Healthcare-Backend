@@ -21,7 +21,7 @@ import type {
 	IResetPasswordPayload,
 } from "./auth.interface";
 import { RedisClient } from "../../lib/redis";
-
+import { transporter } from "../../lib/nodeMailer";
 
 const registerPatient = async (payload: IRegisterPatientPayload) => {
 	const { name, password, email } = payload;
@@ -330,9 +330,7 @@ const googleLoginAuth = async (payload: IGoogleLoginPayload) => {
 	};
 };
 
-
 const forgotPasswordAuth = async (payload: IForgotPasswordPayload) => {
-   
 	const { email } = payload;
 
 	const IsUserExists = await prisma.user.findUnique({
@@ -351,8 +349,10 @@ const forgotPasswordAuth = async (payload: IForgotPasswordPayload) => {
 		throw new Error("User is deleted");
 	}
 
-	if( IsUserExists.authProvider !== AuthProvider.CREDENTIAL) {
-		throw new Error("User is registered with Google. Please login using Google");
+	if (IsUserExists.authProvider !== AuthProvider.CREDENTIAL) {
+		throw new Error(
+			"User is registered with Google. Please login using Google",
+		);
 	}
 
 	// otp genarte
@@ -361,24 +361,28 @@ const forgotPasswordAuth = async (payload: IForgotPasswordPayload) => {
 
 	const key = `forgot-password:${email}`;
 
-	await RedisClient.set(key, otp,{
+	await RedisClient.set(key, otp, {
 		expiration: {
 			type: "EX",
 			value: 5 * 60, // 5 minutes in seconds
 		},
 	});
-	
 
-
-}
+	await transporter.sendMail({
+		from: config.SMTP_SENDER,
+		to: IsUserExists.email,
+		subject: "Password Reset OTP",
+		text: `Your OTP for password reset is: ${otp}. It will expire in 5 minutes.`,
+	});
+};
 
 const resetPasswordAuth = async (payload: IResetPasswordPayload) => {
-	const { email ,otp,newPassword} = payload;
+	const { email, otp, newPassword } = payload;
 
 	const IsUserExists = await prisma.user.findUnique({
 		where: { email },
 	});
-	
+
 	if (!IsUserExists) {
 		throw new Error("User Does not Exist by forgetAuth");
 	}
@@ -391,42 +395,51 @@ const resetPasswordAuth = async (payload: IResetPasswordPayload) => {
 		throw new Error("User is deleted");
 	}
 
-	if( IsUserExists.authProvider !== AuthProvider.CREDENTIAL) {
-		throw new Error("User is registered with Google. Please login using Google");
+	if (IsUserExists.authProvider !== AuthProvider.CREDENTIAL) {
+		throw new Error(
+			"User is registered with Google. Please login using Google",
+		);
 	}
 
 	// otp genarte
 
-const Get_otp = await RedisClient.get(`forgot-password:${email}`);
+	const Get_otp = await RedisClient.get(`forgot-password:${email}`);
 
-if (!Get_otp) {
-    throw new Error("OTP has expired or is invalid");
-}
-
-if (Get_otp !== otp) {
-    throw new Error("Invalid OTP");
-}
-
-const hashedPassword = await bcrypt.hash(
-    newPassword,
-    Number(config.BCRYPT_SALT_ROUNDS)
-);
-
-await prisma.user.update({
-    where: { email },
-    data: {
-        password: hashedPassword,
-    },
-});
-
-await RedisClient.del(`forgot-password:${email}`);
-
-return {
-    message: "OTP verified successfully and password reset",
-};
+	if (!Get_otp) {
+		throw new Error("OTP has expired or is invalid");
 	}
 
+	if (Get_otp !== otp) {
+		throw new Error("Invalid OTP");
+	}
 
+	const hashedPassword = await bcrypt.hash(
+		newPassword,
+		Number(config.BCRYPT_SALT_ROUNDS),
+	);
+
+	await prisma.user.update({
+		where: {
+			email: IsUserExists.email,
+		},
+		data: {
+			password: hashedPassword,
+		},
+	});
+
+	await RedisClient.del(`forgot-password:${email}`);
+
+	await transporter.sendMail({
+		from: config.SMTP_SENDER,
+		to: IsUserExists.email,
+		subject: "Password Change Successful",
+		text: `Your password has been changed successfully.`,
+	});
+
+	return {
+		message: "OTP verified successfully and password reset",
+	};
+};
 
 export const AuthService = {
 	registerPatient,
