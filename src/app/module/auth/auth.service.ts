@@ -130,7 +130,9 @@ const verifyPatientEmailService = async (payload: IverifyPatientPayload) => {
 		include: { patient: true },
 	});
 
+	await RedisClient.del(patintRegisterKey); // delete redis user data after user created
 	const { patient, ...user } = createdUser;
+
 	const jwtPayload = {
 		userId: user.id,
 		name: user.name,
@@ -149,8 +151,6 @@ const verifyPatientEmailService = async (payload: IverifyPatientPayload) => {
 		config.JWT_REFRESH_SECRET,
 		config.JWT_REFRESH_EXPIRES_IN as SignOptions,
 	);
-
-	await RedisClient.del(patintRegisterKey); // delete redis user data after user created
 
 	await transporter.sendMail({
 		from: config.SMTP_SENDER,
