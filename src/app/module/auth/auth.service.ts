@@ -19,14 +19,13 @@ import type {
 	IRegisterPatientPayload,
 	IRequestUser,
 	IResetPasswordPayload,
+	IverifyPatientPayload,
 } from "./auth.interface";
 import { RedisClient } from "../../lib/redis";
 import { transporter } from "../../lib/nodeMailer";
 
 const registerPatient = async (payload: IRegisterPatientPayload) => {
 	const { name, password, email } = payload;
-
-	// const email = payload.email.trim().toLowerCase();
 
 	const isUserExists = await prisma.user.findUnique({
 		where: { email },
@@ -38,18 +37,92 @@ const registerPatient = async (payload: IRegisterPatientPayload) => {
 
 	const hashedPassword = await bcrypt.hash(password, 8);
 
+	//  redis payload make
+
+	const otp = Crypto.randomInt(100000, 999999).toString();
+	const OtpKey = `register-patient-otp:${email}`;
+	await RedisClient.set(OtpKey, otp, {
+		expiration: {
+			type: "EX",
+			value: 5 * 60, // 5 minutes in seconds
+		},
+	});
+
+	const redisUserDataPayload = {
+		name,
+		email,
+		password: hashedPassword,
+		role: Role.PATIENT,
+		status: UserStatus.ACTIVE,
+		emailVerified: false,
+	};
+
+	const patintRegisterKey = `register-patient-data:${email}`;
+	await RedisClient.set(
+		patintRegisterKey,
+		JSON.stringify(redisUserDataPayload),
+		{
+			expiration: {
+				type: "EX",
+				value: 5 * 60, // 5 minutes in seconds
+			},
+		},
+	);
+
+	await transporter.sendMail({
+		from: config.SMTP_SENDER,
+		to: email,
+		subject: "Patient Email verification OTP",
+		text: `Your OTP for email verification is: ${otp}. It will expire in 5 minutes.`,
+	});
+};
+
+const verifyPatientEmailService = async (payload: IverifyPatientPayload) => {
+	const { email, otp } = payload;
+
+	const isUserExists = await prisma.user.findUnique({
+		where: { email },
+	});
+
+	if (isUserExists?.emailVerified === true) {
+		throw new Error("User email is already verified");
+	}
+
+	const OtpKey = `register-patient-otp:${email}`;
+	const RedisOtp = await RedisClient.get(OtpKey);
+
+	if (!RedisOtp) {
+		throw new Error("OTP has expired or is invalid");
+	}
+
+	if (RedisOtp !== otp) {
+		throw new Error("Invalid OTP");
+	}
+
+	// after otp verify  delete redis otp
+	await RedisClient.del(OtpKey);
+
+	const patintRegisterKey = `register-patient-data:${email}`;
+	const redisUserData = await RedisClient.get(patintRegisterKey);
+
+	if (!redisUserData) {
+		throw new Error("User data not found in Redis");
+	}
+
+	const userData: IRegisterPatientPayload = JSON.parse(redisUserData);
+
 	const createdUser = await prisma.user.create({
 		data: {
-			name,
-			email,
-			password: hashedPassword,
+			name: userData.name,
+			email: userData.email,
+			password: userData.password,
 			role: Role.PATIENT,
 			status: UserStatus.ACTIVE,
 			emailVerified: false,
 			patient: {
 				create: {
-					name,
-					email,
+					name: userData.name,
+					email: userData.email,
 				},
 			},
 		},
@@ -76,6 +149,15 @@ const registerPatient = async (payload: IRegisterPatientPayload) => {
 		config.JWT_REFRESH_SECRET,
 		config.JWT_REFRESH_EXPIRES_IN as SignOptions,
 	);
+
+	await RedisClient.del(patintRegisterKey); // delete redis user data after user created
+
+	await transporter.sendMail({
+		from: config.SMTP_SENDER,
+		to: email,
+		subject: "Welcome to PH HealthCare - Email Verified",
+		text: `Your email has been verified successfully.You can now log in to your account. Welcome to PH HealthCare!`,
+	});
 
 	return {
 		user,
@@ -449,4 +531,5 @@ export const AuthService = {
 	googleLoginAuth,
 	resetPasswordAuth,
 	forgotPasswordAuth,
+	verifyPatientEmailService,
 };

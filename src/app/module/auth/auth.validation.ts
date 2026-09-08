@@ -32,3 +32,17 @@ export const LoginSchema = z.object({
 		.min(4, "Password must be at least 4 characters")
 		.max(100, "Password must not exceed 100 characters"),
 });
+
+export const verifyPatientSchema = z.object({
+	email: z
+		.string()
+		.trim()
+		.email("Invalid email address")
+		.max(100, "Email must not exceed 100 characters")
+		.toLowerCase(),
+
+	otp: z
+		.string()
+		.min(6, "OTP must be at least 6 characters")
+		.max(6, "OTP must not exceed 6 characters"),
+});

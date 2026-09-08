@@ -3,7 +3,11 @@ import { Role } from "../../../generated/prisma/enums";
 import { auth } from "../../middleware/checkAuth";
 import { AuthController } from "./auth.controller";
 import validateRequest from "../../middleware/validateRequest";
-import { RegisterSchema, LoginSchema } from "./auth.validation";
+import {
+	RegisterSchema,
+	LoginSchema,
+	verifyPatientSchema,
+} from "./auth.validation";
 
 const router = Router();
 
@@ -12,6 +16,13 @@ router.post(
 	validateRequest(RegisterSchema),
 	AuthController.registerPatient,
 );
+
+router.post(
+	"/verify-email",
+	validateRequest(verifyPatientSchema),
+	AuthController.verifyPatientEmail,
+);
+
 router.post("/login", validateRequest(LoginSchema), AuthController.loginUser);
 router.get(
 	"/me",
