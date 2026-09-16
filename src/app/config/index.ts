@@ -6,6 +6,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 export default {
 	NODE_ENV: process.env.NODE_ENV,
 	PORT: process.env.PORT,
+	APP_URL:process.env.APP_URL,
 	DATABASE_URL: process.env.DATABASE_URL,
 	BACKEND_URL: process.env.BACKEND_URL,
 	FRONTEND_URL: process.env.FRONTEND_URL,
@@ -40,4 +41,11 @@ export default {
 	CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME!,
 	CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY!,
 	CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET!,
+
+	BKASH_BASE_URL: process.env.BKASH_BASE_URL!,
+	BKASH_USERNAME: process.env.BKASH_USERNAME!,
+	BKASH_PASSWORD: process.env.BKASH_PASSWORD!,
+	BKASH_APP_KEY: process.env.BKASH_APP_KEY!,
+	BKASH_APP_SECRET: process.env.BKASH_APP_SECRET!,
+	BKASH_CALLBACK_URL: process.env.BKASH_CALLBACK_URL
 };
