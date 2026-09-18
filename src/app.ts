@@ -37,28 +37,23 @@ app.use("/api/v1/appointment", appointmentRoutes);
 
 // Basic route
 app.get("/", async (req: Request, res: Response) => {
-
-	
 	res.status(httpStatus.OK).json({
 		success: true,
 		message: "Welcome to PH Healthcare System Backend",
-		
 	});
 });
 
-// test routes 
+// test routes
 app.post("/test", async (req: Request, res: Response) => {
-
-	const getbkashIdToken = await getBkashIdToken()
+	const getbkashIdToken = await getBkashIdToken();
 	console.log(getBkashIdToken);
-	
+
 	res.status(httpStatus.OK).json({
 		success: true,
 		message: "Welcome to PH Healthcare System Backend",
-		bkash: getbkashIdToken
+		bkash: getbkashIdToken,
 	});
 });
-
 
 app.use(globalErrorHandler);
 app.use(notFound);
