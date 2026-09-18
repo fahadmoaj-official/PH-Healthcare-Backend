@@ -17,16 +17,21 @@ const bookAppoinment = catchAsync(async (req: Request, res: Response) => {
 
 const bookAppoinmentCallback = catchAsync(
 	async (req: Request, res: Response) => {
-		const result = await AppoinmentServices.bookAppoinmentCallbackService(
+
+		const { BkashExecutePaymentResult, message, redirectUrl } = await AppoinmentServices.bookAppoinmentCallbackService(
 			req.query,
 		);
 
-		sendResponse(res, {
-			statusCode: httpStatus.OK,
-			success: true,
-			message: "payment callback",
-			data: result,
-		});
+		// sendResponse(res, {
+		// 	statusCode: httpStatus.OK,
+		// 	success: true,
+		// 	message: message,
+		// 	data: BkashExecutePaymentResult,
+		// });
+       console.log("1. BkashExecutePaymentResult", BkashExecutePaymentResult);
+	   console.log("2. message", message);
+
+		res.redirect(redirectUrl);
 	},
 );
 

@@ -28,7 +28,7 @@ const bookAppoinmentService = async () => {
 				amount: "1200",
 				currency: "BDT",
 				intent: "sale",
-				merchantInvoiceNumber: "Inv0124",
+				merchantInvoiceNumber: "Inv01243",
 			}),
 		},
 	);
@@ -42,6 +42,7 @@ const bookAppoinmentService = async () => {
 	}
 	return BkashCreatePaymentResult;
 };
+
 
 const bookAppoinmentCallbackService = async (query: Record<string, any>) => {
 	const paymentID = query.paymentID;
@@ -79,13 +80,39 @@ const bookAppoinmentCallbackService = async (query: Record<string, any>) => {
 
 	const BkashExecutePaymentResult = await BkashExecutePaymentResponse.json();
 
-	if (!BkashExecutePaymentResponse.ok) {
-		throw new Error(
-			BkashExecutePaymentResult.statusMessage ||
-				"bKash payment execution failed",
-		);
+	
+	if(status === "success") {
+		return {
+           BkashExecutePaymentResult,
+		   message: "Payment executed successfully",
+		   redirectUrl: `${config.FRONTEND_URL}/dashboard/my-appointments?status=success`,
+		};
 	}
-	return BkashExecutePaymentResult;
+
+	if(status === "failure") {
+		return {
+           BkashExecutePaymentResult,
+		   message: "Payment failed",
+		   redirectUrl: `${config.FRONTEND_URL}/dashboard/my-appointments?status=failure`,
+		};
+	}
+
+	if(status === "cancel") {
+		return {
+           BkashExecutePaymentResult,
+		   message: "Payment cancelled",
+		   redirectUrl: `${config.FRONTEND_URL}/dashboard/my-appointments?status=cancel`,
+		};
+	}
+		
+		
+
+
+	return {
+		BkashExecutePaymentResult,
+		message: "Payment status unknown",
+		redirectUrl: `${config.FRONTEND_URL}/dashboard/my-appointments`,
+	};
 };
 
 export const AppoinmentServices = {
